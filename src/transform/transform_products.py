@@ -48,6 +48,3 @@ data_products = extract_collection('products')
 
 # data_products = data_products[data_products['minimumOrderQuantity'] >=0]
 
-
-
-print(data_products.dtypes)

@@ -1,7 +1,5 @@
 from ..extract.extract import extract_collection
 import pandas as pd
-from dateutil import parser
-from datetime import datetime
 
 
 data_carts = extract_collection('carts')
