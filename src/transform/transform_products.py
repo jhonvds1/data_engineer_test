@@ -1,52 +1,38 @@
 from ..extract.extract import extract_collection
-
-data_products = extract_collection('products')
-
+import pandas as pd
 
 
-# ---------- tirar dados faltantes
+def drop_missing_values(data_products) -> pd.DataFrame:
+    return data_products.dropna(subset=['title', 'price'])
 
-# data_products = data_products.dropna(subset=['title', 'price'])
 
-# ----------- tratar dados duplicados
+def drop_duplicates_values(data_products) -> pd.DataFrame:
+    unique_fields = ['title', 'sku']
+    return data_products.drop_duplicates(subset=unique_fields, keep='first')
 
-# unique_fields = ['title', 'sku']
-# data_products = data_products.drop_duplicates(subset=unique_fields, keep='first')
 
-# tratar title description category brand sku warrantyInformation shippingInformation availabilityStatus returnPolicy thumbnail
+def drop_spaces(data_products) -> pd.DataFrame:
+    cols = ['title','description','category','brand','sku',
+            'warrantyInformation','shippingInformation',
+            'availabilityStatus','returnPolicy','thumbnail']
+    mask = data_products[cols].apply(lambda x: x.str.strip() != '').all(axis=1)
+    return data_products[mask]
 
-# data_products['title'] = data_products['title'].str.strip()
-# data_products['description'] = data_products['description'].str.strip()
-# data_products['category'] = data_products['category'].str.strip()
-# data_products['brand'] = data_products['brand'].str.strip()
-# data_products['sku'] = data_products['sku'].str.strip()
-# data_products['warrantyInformation'] = data_products['warrantyInformation'].str.strip()
-# data_products['shippingInformation'] = data_products['shippingInformation'].str.strip()
-# data_products['availabilityStatus'] = data_products['availabilityStatus'].str.strip()
-# data_products['returnPolicy'] = data_products['returnPolicy'].str.strip()
-# data_products['thumbnail'] = data_products['thumbnail'].str.strip()
+def drop_inconsistent_values(data_products) -> pd.DataFrame:
+    mask = (
+        (data_products['price'] >= 0) &
+        (data_products['discountPercentage'] >= 0) & (data_products['discountPercentage'] <= 100) &
+        (data_products['rating'] >= 0) & (data_products['rating'] <= 5) &
+        (data_products['stock'] >= 0) &
+        (data_products['weight'] >= 0) &
+        (data_products['minimumOrderQuantity'] >= 0)
+    )
+    return data_products[mask]
 
-# tratamento price
-
-# data_products = data_products[data_products['price'] >= 0]
-
-# tratamento discount %
-
-# data_products = data_products[(data_products['discountPercentage'] >=0) & (data_products['discountPercentage'] <= 100)]
-
-# tratamento rating
-
-# data_products = data_products[(data_products['rating'] >=0) & (data_products['rating'] <= 5)]
-
-# tratamento stock
-
-# data_products = data_products[data_products['stock'] >=0]
-
-# tratamento weight
-
-# data_products = data_products[data_products['weight'] >=0]
-
-# tratamento minimumOrderQuantity
-
-# data_products = data_products[data_products['minimumOrderQuantity'] >=0]
-
+def run_etl_products() -> pd.DataFrame:
+    data_products = extract_collection('products')
+    data_products = drop_missing_values(data_products)
+    data_products = drop_duplicates_values(data_products)
+    data_products = drop_spaces(data_products)
+    data_products = drop_inconsistent_values(data_products)
+    return data_products
