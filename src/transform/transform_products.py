@@ -2,6 +2,8 @@ from ..extract.extract import extract_collection
 
 data_products = extract_collection('products')
 
+
+
 # ---------- tirar dados faltantes
 
 # data_products = data_products.dropna(subset=['title', 'price'])

@@ -22,5 +22,6 @@ def extract_collection(collection_name: str) -> pd.DataFrame:
     collection = db[collection_name]
     data = list(collection.find())
     df = pd.DataFrame(data)
+    client.close()
 
     return df
