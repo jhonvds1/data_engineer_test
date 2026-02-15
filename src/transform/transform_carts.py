@@ -54,9 +54,10 @@ def remove_invalid_orders(data_carts: pd.DataFrame) -> pd.DataFrame:
         'cart_index'
     ].unique()
 
+
     # filtra carrinhos válidos
     data_carts = data_carts.drop(index=invalid_carts)
-
+    
     return data_carts
 
 
@@ -67,9 +68,6 @@ def run_etl_carts() -> pd.DataFrame:
     data_carts = drop_inconsistent_values(data_carts)
     data_carts = transform_transaction_date(data_carts)
     return data_carts
-
-print(run_etl_carts())
-
 
 
     
