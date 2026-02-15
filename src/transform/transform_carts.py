@@ -29,6 +29,11 @@ def transform_transaction_date(data_carts: pd.DataFrame) -> pd.DataFrame:
     data_carts['transaction_date'] = data_carts['transaction_date'].dt.date
     return data_carts
 
+def remove_invalid_orders(data_carts: pd.DataFrame) -> pd.DataFrame:
+    ...
+# TODO: ver se a quantidade de produtos no carrinho é maior q a minima por id de produto
+
+
 
 def run_etl_carts() -> pd.DataFrame:
     data_carts = extract_collection('carts')
@@ -37,7 +42,7 @@ def run_etl_carts() -> pd.DataFrame:
     data_carts = transform_transaction_date(data_carts)
     return data_carts
 
-# TODO: ver se a quantidade de produtos no carrinho é maior q a minima por id de produto
+
 
 
 

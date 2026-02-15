@@ -3,7 +3,7 @@ import pandas as pd
 
 
 def drop_missing_values(data_users: pd.DataFrame) -> pd.DataFrame:
-    return data_users.dropna(subset=['firstName', 'lastName', 'username', 'email', 'password'])
+    return data_users.dropna(subset=['firstName', 'lastName', 'username', 'email', 'password', 'city', 'state', 'country'])
 
 def drop_duplicates_values(data_users: pd.DataFrame) -> pd.DataFrame:
     unique_fields = ['email', 'username', 'cpf', 'cnpj']
@@ -53,7 +53,7 @@ def clean_username(data_users: pd.DataFrame) -> pd.DataFrame:
 def clean_user_fields(data_users: pd.DataFrame) -> pd.DataFrame:
     columns_to_strip = [
         'image', 'bloodGroup', 'eyeColor', 'ip', 'macAddress',
-        'university', 'userAgent', 'role', 'cnpj'
+        'university', 'userAgent', 'role', 'cnpj', 'city', 'state', 'country'
     ]
     for col in columns_to_strip:
         if col in data_users.columns:
@@ -72,9 +72,16 @@ def clean_user_birthdate(data_users: pd.DataFrame) -> pd.DataFrame:
     return data_users
 
 
+def explode_address(data_users: pd.DataFrame) -> pd.DataFrame:
+    address = pd.json_normalize(data_users['address'])
+    cols = ['city', 'state', 'country']
+    for col in cols:
+        data_users[col] = address.get(col)
+    return data_users
 
 def run_etl_users() -> pd.DataFrame:
     data_users = extract_collection('users')
+    data_users = explode_address(data_users)
     data_users = drop_missing_values(data_users)
     data_users = drop_duplicates_values(data_users)
     data_users = clean_first_names(data_users)
