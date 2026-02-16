@@ -3,7 +3,8 @@ import psycopg2
 from dotenv import load_dotenv
 import os
 import pandas as pd
-from psycopg2.extras import execute_batch
+from psycopg2.extras import execute_values
+
 
 load_dotenv()
 
@@ -178,9 +179,9 @@ def load_dim_users(data_users: pd.DataFrame, cursor):
     if data_users.empty:
         logging.warning("DataFrame de usuários vazio")
         return
-    execute_batch(cursor, """
+    execute_values(cursor, """
         INSERT INTO dim_users (user_id, first_name, last_name, age, gender, city, state, country)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES %s
         ON CONFLICT (user_id) DO NOTHING;
     """, data_users[['id', 'firstName', 'lastName', 'age', 'gender', 'city', 'state', 'country']].drop_duplicates().values.tolist())
     logging.info(f"Dim_users concluída, registros inseridos: {cursor.rowcount}")
@@ -190,9 +191,9 @@ def load_dim_products(data_products: pd.DataFrame, cursor):
     if data_products.empty:
         logging.warning("DataFrame de produtos vazio")
         return
-    execute_batch(cursor, """
+    execute_values(cursor, """
         INSERT INTO dim_products (product_id, title, price, rating, brand)
-        VALUES (%s, %s, %s, %s, %s)
+        VALUES %s
         ON CONFLICT (product_id) DO NOTHING;
     """, data_products[['id', 'title', 'price', 'rating', 'brand']].drop_duplicates().values.tolist())
     logging.info(f"Dim_products concluída, registros inseridos: {cursor.rowcount}")
@@ -214,9 +215,9 @@ def load_dim_time(data_carts: pd.DataFrame, cursor):
     data_carts['mes'] = data_carts['transaction_date'].dt.month
     data_carts['dia'] = data_carts['transaction_date'].dt.day
 
-    execute_batch(cursor, """
+    execute_values(cursor, """
         INSERT INTO dim_time (date, year, month, day)
-        VALUES (%s, %s, %s, %s)
+        VALUES %s
         ON CONFLICT (date) DO NOTHING;
     """, data_carts[['transaction_date', 'ano', 'mes', 'dia']].drop_duplicates().values.tolist())
     logging.info(f"Dim_time carregada, registros inseridos: {cursor.rowcount}")
@@ -264,9 +265,9 @@ def load_fact_sales(carts_users: pd.DataFrame, cursor, time_df: pd.DataFrame):
     records_to_insert = products_df[['user_id', 'id', 'time_id', 'price', 'quantity']].values.tolist()
     logging.info(f"Total de registros a tentar inserir na fact_sales: {len(records_to_insert)}")
 
-    execute_batch(cursor, """
+    execute_values(cursor, """
         INSERT INTO fact_sales (user_id, product_id, time_id, unit_price, quantity)
-        VALUES (%s, %s, %s, %s, %s)
+        VALUES %s
         ON CONFLICT (user_id, product_id, time_id) DO NOTHING;
     """, records_to_insert)
     logging.info(f"Fact_sales concluída, registros inseridos aproximadamente: {cursor.rowcount}")
@@ -283,9 +284,9 @@ def run_load(data_carts: pd.DataFrame, data_products: pd.DataFrame, data_users: 
         time_df = load_dim_time(data_carts, cursor)
         carts_users = merge_dfs(data_carts, data_users)
         load_fact_sales(carts_users, cursor, time_df)
+        create_views(cursor)
         conn.commit()
         logging.info("Commit realizado com sucesso")
-        create_views(cursor)
     except Exception as e:
         logging.error(f"Erro durante o ETL: {e}")
         conn.rollback()
