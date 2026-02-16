@@ -59,3 +59,5 @@ python -m src.main
 ```
 
 Essa alteração fará com que todas as vendas sejam mantidas, mesmo que algum produto esteja abaixo da quantidade mínima.
+
+- Foram feitas **mais tratativas de dados do que o necessário**, mas isso foi **totalmente proposital**, com o objetivo de demonstrar conhecimento em processamento de dados.
