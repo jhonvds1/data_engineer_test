@@ -5,7 +5,7 @@ from .transform.transform_carts import run_etl_carts
 from .transform.transform_products import run_etl_products
 from .transform.transform_users import run_etl_users
 # Importa função de carga para PostgreSQL
-from .load.load import run_load
+from .load.load import run_load, connect_db
 
 # Configuração global de logs para todo o pipeline
 logging.basicConfig(
@@ -43,12 +43,37 @@ def main() -> pd.DataFrame:
         run_load(data_carts, data_products, data_users)  # Chama função de carga ETL
         logging.info("Carga concluída com sucesso")
 
+        executar_views(connect_db())
+
         logging.info("Pipeline ETL completo finalizado")
         return data_carts, data_products, data_users  # Retorna DataFrames para validação/testes
 
     except Exception as e:
         logging.error(f"Pipeline ETL falhou: {e}")  # Log de erro em caso de falha
         raise  # Propaga exceção para tratamento externo ou debug
+
+def fetch_view(view_name: str, cursor) -> pd.DataFrame:
+    """
+    Retorna os dados de uma view como DataFrame.
+    """
+    cursor.execute(f"SELECT * FROM {view_name}")
+    colnames = [desc[0] for desc in cursor.description]  # nomes das colunas
+    rows = cursor.fetchall()
+    return pd.DataFrame(rows, columns=colnames)
+
+def executar_views(conn):
+    cursor = conn.cursor()
+    view_names = [
+        "vw_revenue_by_location",
+        "vw_top_selling_product",
+        "vw_top_brand_selling_state",
+        "vw_rating_sales",
+        "vw_top_selling_months"
+    ]
+    for view in view_names:
+        print(f"\n===== {view} =====")
+        df = fetch_view(view, cursor)
+        print(df)
 
 # Permite execução direta do script
 if __name__ == "__main__":
