@@ -1,19 +1,20 @@
 import logging
-import psycopg2
-from dotenv import load_dotenv
-import os
-import pandas as pd
-from psycopg2.extras import execute_values
+import psycopg2                       # Biblioteca para conexão e execução de SQL no PostgreSQL
+from dotenv import load_dotenv        # Para carregar variáveis de ambiente de um arquivo .env
+import os                             # Para acessar variáveis de ambiente
+import pandas as pd                   # Para manipulação de dados em DataFrames
+from psycopg2.extras import execute_values  # Função eficiente para inserção em lote no PostgreSQL
 
-
+# Carrega variáveis do arquivo .env
 load_dotenv()
 
-# Configuração de logs
+# Configuração de logs para acompanhamento do ETL
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO,               # Nível INFO (inclui INFO, WARNING, ERROR)
+    format='%(asctime)s - %(levelname)s - %(message)s'  # Formato: timestamp - nível - mensagem
 )
 
+# Função para conectar ao PostgreSQL
 def connect_db():
     """Conecta ao PostgreSQL e retorna a conexão"""
     try:
@@ -27,8 +28,9 @@ def connect_db():
         return conn
     except Exception as e:
         logging.error(f"Falha ao conectar no PostgreSQL: {e}")
-        raise
+        raise  # Propaga o erro para o chamador tratar
 
+# Função para criar todas as tabelas do modelo estrela
 def create_tables(cursor):
     tables = {
         "dim_users": """
@@ -74,6 +76,7 @@ def create_tables(cursor):
         """
     }
 
+    # Itera sobre todas as tabelas definidas e cria no banco
     for table_name, sql in tables.items():
         try:
             print(f"[INFO] Criando tabela '{table_name}'...")
@@ -82,6 +85,7 @@ def create_tables(cursor):
         except Exception as e:
             print(f"[ERROR] Falha ao criar tabela '{table_name}': {e}")
 
+# Função para criar todas as views definidas
 def create_views(cursor):
     views = {
         "vw_revenue_by_location": """
@@ -165,6 +169,7 @@ def create_views(cursor):
         """
     }
 
+    # Criação das views iterativamente
     for view_name, sql in views.items():
         try:
             print(f"[INFO] Criando view '{view_name}'...")
@@ -173,7 +178,7 @@ def create_views(cursor):
         except Exception as e:
             print(f"[ERROR] Falha ao criar view '{view_name}': {e}")
 
-
+# Função para carregar dimensão de usuários
 def load_dim_users(data_users: pd.DataFrame, cursor):
     logging.info(f"Iniciando carga da dimensão users ({len(data_users)} registros)")
     if data_users.empty:
@@ -186,6 +191,7 @@ def load_dim_users(data_users: pd.DataFrame, cursor):
     """, data_users[['id', 'firstName', 'lastName', 'age', 'gender', 'city', 'state', 'country']].drop_duplicates().values.tolist())
     logging.info(f"Dim_users concluída, registros inseridos: {cursor.rowcount}")
 
+# Função para carregar dimensão de produtos
 def load_dim_products(data_products: pd.DataFrame, cursor):
     logging.info(f"Iniciando carga da dimensão products ({len(data_products)} registros)")
     if data_products.empty:
@@ -198,23 +204,26 @@ def load_dim_products(data_products: pd.DataFrame, cursor):
     """, data_products[['id', 'title', 'price', 'rating', 'brand']].drop_duplicates().values.tolist())
     logging.info(f"Dim_products concluída, registros inseridos: {cursor.rowcount}")
 
+# Função para carregar dimensão de tempo
 def load_dim_time(data_carts: pd.DataFrame, cursor):
     logging.info("Iniciando carga da dimensão time")
     if data_carts.empty:
         logging.warning("DataFrame de carrinhos vazio")
         return pd.DataFrame(columns=['time_id', 'transaction_date'])
     
-    # Converter datas
+    # Converter coluna de datas para datetime
     try:
         data_carts['transaction_date'] = pd.to_datetime(data_carts['transaction_date'])
     except Exception as e:
         logging.error(f"Erro ao converter datas: {e}")
         raise
 
+    # Extrair ano, mês e dia
     data_carts['ano'] = data_carts['transaction_date'].dt.year
     data_carts['mes'] = data_carts['transaction_date'].dt.month
     data_carts['dia'] = data_carts['transaction_date'].dt.day
 
+    # Inserção em lote com ON CONFLICT para evitar duplicidade
     execute_values(cursor, """
         INSERT INTO dim_time (date, year, month, day)
         VALUES %s
@@ -222,12 +231,13 @@ def load_dim_time(data_carts: pd.DataFrame, cursor):
     """, data_carts[['transaction_date', 'ano', 'mes', 'dia']].drop_duplicates().values.tolist())
     logging.info(f"Dim_time carregada, registros inseridos: {cursor.rowcount}")
 
-    # Buscar time_id reais
+    # Recupera time_id gerados no banco
     cursor.execute("SELECT time_id, date FROM dim_time;")
     time_map = pd.DataFrame(cursor.fetchall(), columns=['time_id', 'transaction_date'])
     logging.info(f"Recuperados {len(time_map)} registros de time_id")
     return time_map
 
+# Função para fazer merge de carts com usuários
 def merge_dfs(data_carts: pd.DataFrame, data_users: pd.DataFrame) -> pd.DataFrame:
     logging.info("Iniciando merge de carts e users")
     merged = pd.merge(data_carts, data_users, how='left', left_on='userId', right_on='id')\
@@ -238,13 +248,14 @@ def merge_dfs(data_carts: pd.DataFrame, data_users: pd.DataFrame) -> pd.DataFram
     logging.info(f"Merge concluído: {len(merged)} registros")
     return merged
 
+# Função para carregar tabela de fatos de vendas
 def load_fact_sales(carts_users: pd.DataFrame, cursor, time_df: pd.DataFrame):
     logging.info("Iniciando carga da fact_sales")
     if carts_users.empty:
         logging.warning("DataFrame de vendas vazio")
         return
 
-    # Conversão de datas
+    # Conversão de datas para merge com dimensão de tempo
     carts_users['transaction_date'] = pd.to_datetime(carts_users['transaction_date'])
     time_df['transaction_date'] = pd.to_datetime(time_df['transaction_date'])
 
@@ -254,17 +265,19 @@ def load_fact_sales(carts_users: pd.DataFrame, cursor, time_df: pd.DataFrame):
     if missing_time > 0:
         logging.warning(f"{missing_time} registros não possuem time_id correspondente")
 
-    # Explode produtos
+    # Explode lista de produtos em linhas separadas
     carts_exploded = merged.explode('products').reset_index(drop=True)
-    products_df = pd.json_normalize(carts_exploded['products'])
+    products_df = pd.json_normalize(carts_exploded['products'])  # Normaliza dict de produtos
     products_df['user_id'] = carts_exploded['user_id']
     products_df['time_id'] = carts_exploded['time_id']
     products_df['price'] = products_df.get('price', 0)
     products_df['quantity'] = products_df['quantity']
 
+    # Prepara registros para inserção
     records_to_insert = products_df[['user_id', 'id', 'time_id', 'price', 'quantity']].values.tolist()
     logging.info(f"Total de registros a tentar inserir na fact_sales: {len(records_to_insert)}")
 
+    # Inserção em lote na fact_sales
     execute_values(cursor, """
         INSERT INTO fact_sales (user_id, product_id, time_id, unit_price, quantity)
         VALUES %s
@@ -272,24 +285,25 @@ def load_fact_sales(carts_users: pd.DataFrame, cursor, time_df: pd.DataFrame):
     """, records_to_insert)
     logging.info(f"Fact_sales concluída, registros inseridos aproximadamente: {cursor.rowcount}")
 
+# Função principal para rodar todo o ETL
 def run_load(data_carts: pd.DataFrame, data_products: pd.DataFrame, data_users: pd.DataFrame):
     logging.info("Iniciando ETL completo")
     conn = connect_db()
     cursor = conn.cursor()
 
     try:
-        create_tables(cursor)
-        load_dim_users(data_users, cursor)
-        load_dim_products(data_products, cursor)
-        time_df = load_dim_time(data_carts, cursor)
-        carts_users = merge_dfs(data_carts, data_users)
-        load_fact_sales(carts_users, cursor, time_df)
-        create_views(cursor)
-        conn.commit()
+        create_tables(cursor)                              # Cria todas as tabelas
+        load_dim_users(data_users, cursor)                 # Carrega dimensão users
+        load_dim_products(data_products, cursor)           # Carrega dimensão products
+        time_df = load_dim_time(data_carts, cursor)        # Carrega dimensão time
+        carts_users = merge_dfs(data_carts, data_users)    # Faz merge de carrinhos e usuários
+        load_fact_sales(carts_users, cursor, time_df)      # Carrega tabela de fatos
+        create_views(cursor)                               # Cria as views de análise
+        conn.commit()                                      # Confirma todas as alterações no banco
         logging.info("Commit realizado com sucesso")
     except Exception as e:
         logging.error(f"Erro durante o ETL: {e}")
-        conn.rollback()
+        conn.rollback()                                    # Reverte alterações em caso de erro
         logging.info("Rollback executado devido a erro")
         raise
     finally:
