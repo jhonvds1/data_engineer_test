@@ -285,6 +285,37 @@ def load_fact_sales(carts_users: pd.DataFrame, cursor, time_df: pd.DataFrame):
     """, records_to_insert)
     logging.info(f"Fact_sales concluída, registros inseridos aproximadamente: {cursor.rowcount}")
 
+import pandas as pd
+
+# Exibe todas as views existentes no banco de dados
+def show_views(cursor):
+    try:
+        # Consulta do information_schema para listar views
+        query = """
+        SELECT table_schema, table_name
+        FROM information_schema.views
+        WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+        ORDER BY table_schema, table_name;
+        """
+
+        # Executa a query
+        cursor.execute(query)
+        result = cursor.fetchall()
+
+        # Converte para DataFrame para visualização
+        df_views = pd.DataFrame(result, columns=['schema', 'view_name'])
+
+        # Exibe o DataFrame
+        print("Views disponíveis no banco:")
+        print(df_views)
+
+        return df_views
+
+    except Exception as e:
+        print(f"Erro ao listar views: {e}")
+        return pd.DataFrame(columns=['schema', 'view_name'])
+
+
 # Função principal para rodar todo o ETL
 def run_load(data_carts: pd.DataFrame, data_products: pd.DataFrame, data_users: pd.DataFrame):
     logging.info("Iniciando ETL completo")
@@ -300,6 +331,7 @@ def run_load(data_carts: pd.DataFrame, data_products: pd.DataFrame, data_users: 
         load_fact_sales(carts_users, cursor, time_df)      # Carrega tabela de fatos
         create_views(cursor)                               # Cria as views de análise
         conn.commit()                                      # Confirma todas as alterações no banco
+        show_views(cursor)                                 # Exibe as Views criadas
         logging.info("Commit realizado com sucesso")
     except Exception as e:
         logging.error(f"Erro durante o ETL: {e}")
