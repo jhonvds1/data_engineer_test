@@ -28,6 +28,151 @@ def connect_db():
         logging.error(f"Falha ao conectar no PostgreSQL: {e}")
         raise
 
+def create_tables(cursor):
+    tables = {
+        "dim_users": """
+            CREATE TABLE IF NOT EXISTS dim_users (
+                user_id SERIAL PRIMARY KEY,
+                first_name VARCHAR(20),
+                last_name VARCHAR(20),
+                age INT,
+                gender VARCHAR(20),
+                city VARCHAR(20),
+                state VARCHAR(20),
+                country VARCHAR(20)
+            );
+        """,
+        "dim_products": """
+            CREATE TABLE IF NOT EXISTS dim_products (
+                product_id SERIAL PRIMARY KEY,
+                title VARCHAR(50),
+                price NUMERIC(10,2),
+                rating FLOAT,
+                brand VARCHAR(20)
+            );
+        """,
+        "dim_time": """
+            CREATE TABLE IF NOT EXISTS dim_time (
+                time_id SERIAL PRIMARY KEY,
+                date DATE UNIQUE,
+                year INT,
+                month INT,
+                day INT
+            );
+        """,
+        "fact_sales": """
+            CREATE TABLE IF NOT EXISTS fact_sales (
+                sale_id SERIAL PRIMARY KEY,
+                user_id INT REFERENCES dim_users(user_id),
+                product_id INT REFERENCES dim_products(product_id),
+                time_id INT REFERENCES dim_time(time_id),
+                unit_price NUMERIC(10,2),
+                quantity INT,
+                CONSTRAINT unique_sale UNIQUE (user_id, product_id, time_id)
+            );
+        """
+    }
+
+    for table_name, sql in tables.items():
+        try:
+            print(f"[INFO] Criando tabela '{table_name}'...")
+            cursor.execute(sql)
+            print(f"[SUCCESS] Tabela '{table_name}' criada ou já existia.")
+        except Exception as e:
+            print(f"[ERROR] Falha ao criar tabela '{table_name}': {e}")
+
+def create_views(cursor):
+    views = {
+        "vw_revenue_by_location": """
+            CREATE OR REPLACE VIEW vw_revenue_by_location AS 
+            SELECT
+                us.city,
+                us.state,
+                us.country,
+                SUM(sa.unit_price * sa.quantity) AS revenue_total
+            FROM fact_sales AS sa
+            LEFT JOIN dim_users AS us
+                ON us.user_id = sa.user_id
+            GROUP BY us.city, us.state, us.country
+            ORDER BY revenue_total DESC;
+        """,
+        "vw_top_selling_product": """
+            CREATE OR REPLACE VIEW vw_top_selling_product AS 
+            SELECT 
+                pr.product_id,
+                pr.title,
+                pr.brand,
+                SUM(sa.unit_price * sa.quantity) AS revenue
+            FROM fact_sales AS sa
+            LEFT JOIN dim_products AS pr
+                ON sa.product_id = pr.product_id
+            GROUP BY pr.product_id, pr.title, pr.brand
+            ORDER BY revenue DESC;
+        """,
+        "vw_top_brand_selling_state": """
+            CREATE OR REPLACE VIEW vw_top_brand_selling_state AS
+            SELECT
+                pr.brand,
+                us.state,
+                SUM(sa.unit_price * sa.quantity) AS revenue
+            FROM fact_sales AS sa
+            LEFT JOIN dim_products AS pr
+                ON sa.product_id = pr.product_id
+            LEFT JOIN dim_users AS us
+                ON sa.user_id = us.user_id
+            GROUP BY us.state, pr.brand
+            ORDER BY revenue DESC;
+        """,
+        "vw_rating_sales": """
+            CREATE OR REPLACE VIEW vw_rating_sales AS
+            SELECT
+                pr.product_id,
+                pr.title,
+                pr.brand,
+                pr.rating,
+                SUM(sa.quantity) AS total_units_sold,
+                SUM(sa.unit_price * sa.quantity) AS revenue_total
+            FROM fact_sales AS sa
+            LEFT JOIN dim_products AS pr
+                ON sa.product_id = pr.product_id
+            GROUP BY pr.product_id, pr.title, pr.brand, pr.rating
+            ORDER BY total_units_sold DESC;
+        """,
+        "vw_top_selling_months": """
+            CREATE OR REPLACE VIEW vw_top_selling_months AS
+            SELECT 
+                CASE ti.month
+                    WHEN 1 THEN 'Janeiro'
+                    WHEN 2 THEN 'Fevereiro'
+                    WHEN 3 THEN 'Março'
+                    WHEN 4 THEN 'Abril'
+                    WHEN 5 THEN 'Maio'
+                    WHEN 6 THEN 'Junho'
+                    WHEN 7 THEN 'Julho'
+                    WHEN 8 THEN 'Agosto'
+                    WHEN 9 THEN 'Setembro'
+                    WHEN 10 THEN 'Outubro'
+                    WHEN 11 THEN 'Novembro'
+                    WHEN 12 THEN 'Dezembro'
+                END AS month,
+                SUM(sa.quantity * sa.unit_price) AS revenue
+            FROM fact_sales AS sa
+            LEFT JOIN dim_time AS ti
+                ON sa.time_id = ti.time_id
+            GROUP BY ti.month
+            ORDER BY revenue DESC;
+        """
+    }
+
+    for view_name, sql in views.items():
+        try:
+            print(f"[INFO] Criando view '{view_name}'...")
+            cursor.execute(sql)
+            print(f"[SUCCESS] View '{view_name}' criada ou atualizada com sucesso.")
+        except Exception as e:
+            print(f"[ERROR] Falha ao criar view '{view_name}': {e}")
+
+
 def load_dim_users(data_users: pd.DataFrame, cursor):
     logging.info(f"Iniciando carga da dimensão users ({len(data_users)} registros)")
     if data_users.empty:
@@ -113,10 +258,10 @@ def load_fact_sales(carts_users: pd.DataFrame, cursor, time_df: pd.DataFrame):
     products_df = pd.json_normalize(carts_exploded['products'])
     products_df['user_id'] = carts_exploded['user_id']
     products_df['time_id'] = carts_exploded['time_id']
-    products_df['unit_price'] = products_df.get('unitPrice', 0)
+    products_df['price'] = products_df.get('price', 0)
     products_df['quantity'] = products_df['quantity']
 
-    records_to_insert = products_df[['user_id', 'id', 'time_id', 'unit_price', 'quantity']].values.tolist()
+    records_to_insert = products_df[['user_id', 'id', 'time_id', 'price', 'quantity']].values.tolist()
     logging.info(f"Total de registros a tentar inserir na fact_sales: {len(records_to_insert)}")
 
     execute_batch(cursor, """
@@ -132,6 +277,7 @@ def run_load(data_carts: pd.DataFrame, data_products: pd.DataFrame, data_users: 
     cursor = conn.cursor()
 
     try:
+        create_tables(cursor)
         load_dim_users(data_users, cursor)
         load_dim_products(data_products, cursor)
         time_df = load_dim_time(data_carts, cursor)
@@ -139,6 +285,7 @@ def run_load(data_carts: pd.DataFrame, data_products: pd.DataFrame, data_users: 
         load_fact_sales(carts_users, cursor, time_df)
         conn.commit()
         logging.info("Commit realizado com sucesso")
+        create_views(cursor)
     except Exception as e:
         logging.error(f"Erro durante o ETL: {e}")
         conn.rollback()
