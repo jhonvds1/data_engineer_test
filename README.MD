@@ -1,0 +1,48 @@
+<div align='center'>
+
+![Magazord](img/logo-magazord.png)
+
+</div>
+
+
+# Guia de Execução do Projeto
+
+Este repositório contém o código do projeto **Data Engineer Test**. Abaixo estão as instruções detalhadas para configuração e execução do ambiente.
+
+---
+
+## 1. Clonar o Repositório
+
+Para iniciar, clone o repositório localmente utilizando o Git:
+
+```bash
+git clone https://github.com/jhonvds1/data_engineer_test.git
+```
+Em seguida, acesse a pasta do projeto:
+```
+cd data_engineer_test
+```
+
+## 2. Instalar Dependências
+
+Instale todas as bibliotecas necessárias listadas no arquivo requirements.txt:
+
+```
+pip install -r requirements.txt
+```
+
+## 3. Inicializar o Docker
+
+O projeto utiliza Docker para gerenciar dependências e serviços. Para iniciar os containers, execute:
+
+```
+docker compose up
+```
+
+## 4. Executar a Aplicação
+
+Após a inicialização do Docker, execute o arquivo principal do projeto:
+
+```
+python -m src.main
+```
