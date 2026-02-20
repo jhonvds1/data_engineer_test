@@ -1,13 +1,6 @@
-<div align='center'>
-
-![Magazord](img/logo-magazord.png)
-
-</div>
-
-
 # Guia de Execução do Projeto
 
-Este repositório contém o código do projeto **Data Engineer Test**. Abaixo estão as instruções detalhadas para configuração e execução do ambiente.
+Abaixo estão as instruções detalhadas para configuração e execução do ambiente.
 
 ---
 
